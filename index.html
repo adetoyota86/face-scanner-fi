@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Live Face Scanner - Final Inspection PPO</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: #0f172a; color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: space-between; min-height: 100vh; padding: 16px; }
+    
+    .header { text-align: center; margin-top: 10px; }
+    .header h2 { font-size: 16px; font-weight: 800; color: #ffffff; letter-spacing: 0.5px; }
+    .header p { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+
+    .cam-box { width: 100%; max-width: 400px; aspect-ratio: 3/4; background: #000; border-radius: 20px; overflow: hidden; position: relative; border: 2px solid #334155; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; }
+    video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    
+    /* Lingkaran Panduan Posisi Wajah */
+    .face-guide { position: absolute; width: 65%; height: 60%; border: 2.5px dashed #22c55e; border-radius: 50%; pointer-events: none; box-shadow: 0 0 15px rgba(34, 197, 94, 0.3); }
+
+    .actions { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+    .btn-capture { width: 100%; padding: 15px; background: #dc2626; color: white; font-weight: 800; font-size: 14px; border: none; border-radius: 14px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4); }
+    .btn-capture:active { transform: scale(0.98); background: #b91c1c; }
+    .btn-close { width: 100%; padding: 10px; background: transparent; color: #94a3b8; font-size: 12px; border: none; cursor: pointer; }
+
+    .error-msg { color: #f87171; font-size: 12px; text-align: center; display: none; padding: 8px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>TOYOTA FINAL INSPECTION</h2>
+    <p>Posisikan wajah Anda tegak lurus di dalam lingkaran hijau</p>
+  </div>
+
+  <div class="cam-box">
+    <video id="videoElement" autoplay playsinline muted></video>
+    <div class="face-guide"></div>
+  </div>
+
+  <div id="errorText" class="error-msg"></div>
+
+  <div class="actions">
+    <button onclick="captureAndSend()" class="btn-capture">📸 AMBIL & VERIFIKASI SEKARANG</button>
+    <button onclick="window.close()" class="btn-close">Batal / Tutup</button>
+  </div>
+
+  <script>
+    let localStream = null;
+    const video = document.getElementById('videoElement');
+    const errText = document.getElementById('errorText');
+
+    // Mulai kamera otomatis saat dibuka di GitHub Pages
+    window.addEventListener('DOMContentLoaded', () => {
+      startCamera();
+    });
+
+    async function startCamera() {
+      const constraintsList = [
+        { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false },
+        { video: { facingMode: 'user' }, audio: false },
+        { video: true, audio: false }
+      ];
+
+      for (let constraints of constraintsList) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          localStream = stream;
+          video.srcObject = stream;
+          await video.play();
+          return;
+        } catch (err) {
+          console.warn("Mencoba fallback constraint kamera...", err);
+        }
+      }
+
+      errText.style.display = 'block';
+      errText.innerText = "Gagal mengakses kamera. Pastikan izin kamera telah diizinkan pada browser ini.";
+    }
+
+    function captureAndSend() {
+      if (!video.videoWidth || !video.videoHeight) {
+        alert("Kamera belum siap, tunggu 1-2 detik...");
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const base64Data = canvas.toDataURL('image/jpeg', 0.85);
+
+      // Hentikan stream kamera
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+
+      // Kirim hasil gambar kembali ke portal Apps Script
+      if (window.opener) {
+        window.opener.postMessage({ type: 'FACE_SCANNED_GITHUB', image: base64Data }, '*');
+        window.close();
+      } else {
+        alert("Portal utama tidak terdeteksi. Silakan kembali ke tab portal.");
+      }
+    }
+  </script>
+</body>
+</html>
